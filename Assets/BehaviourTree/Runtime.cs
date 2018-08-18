@@ -13,7 +13,7 @@ namespace Sharvey.ECS.BehaviourTree
 	{
 		public virtual void Update()
 		{
-			Debug.Log(this.GetType());
+			//Debug.Log(this.GetType());
 		}
 	}
 
@@ -48,16 +48,17 @@ namespace Sharvey.ECS.BehaviourTree
 		{
 			[ReadOnly] public BehaviourTree Tree;
 			[ReadOnly] public int StartNode, EndNode;
-			public ComponentDataArray<EntityRuntime> Runtime;
-
-			//public unsafe void Execute()
-			//{
-			//	Debug.Log($"wtf {Tree.Data[0]}");
-			//}
+			[ReadOnly] public ComponentDataArray<EntityRuntime> Runtime;
 
 			public void Execute(int index)
 			{
-				Debug.Log($"wtf {Tree.Layers[index]}");
+				var node = (Node)Tree.Nodes[index].Target;
+				Debug.Log($"Execute {StartNode} {EndNode} {node.GetType()}");
+				for (int i=0; i<Runtime.Length; ++i)
+				{
+					node.Update();	
+				}
+				//Debug.Log($"wtf {Tree.Layers[index]}");
 			}
 		}
 
@@ -82,12 +83,21 @@ namespace Sharvey.ECS.BehaviourTree
 				var tree = trees[treeIdx];
 				_group.SetFilter(tree);
 
-				inputDeps = new UpdateLayerJob
+				var end = tree.Nodes.Length;
+				for (int i=tree.Layers.Length-1; i>=0; --i)
 				{
-					Tree = trees[treeIdx],
-					StartNode = 0,
-					Runtime = _group.GetComponentDataArray<EntityRuntime>(),
-				}.Schedule(tree.Layers.Length, 0xFF, inputDeps);
+					var start = end - tree.Layers[i];
+
+					inputDeps = new UpdateLayerJob
+					{
+						Tree = trees[treeIdx],
+						StartNode = start,
+						EndNode = end,
+						Runtime = _group.GetComponentDataArray<EntityRuntime>(),
+					}.Schedule(tree.Layers.Length, 0xFF, inputDeps);
+
+					end = start;
+				}
 			}
 
 			return base.OnUpdate(inputDeps);

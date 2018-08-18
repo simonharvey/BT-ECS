@@ -20,9 +20,7 @@ namespace Sharvey.ECS.BehaviourTree
 
 	public struct BehaviourTree : ISharedComponentData, IDisposable
 	{
-		//public NativeArraySharedValues<int> What;
 		[ReadOnly] public int NodeDataSize;
-		//[ReadOnly] public NativeArray<int> Data;
 		[ReadOnly] public NativeArray<int> Layers;
 		[ReadOnly] public NativeArray<GCHandle> Nodes;
 
