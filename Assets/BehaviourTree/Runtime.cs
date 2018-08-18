@@ -11,7 +11,31 @@ namespace Sharvey.ECS.BehaviourTree
 {
 	public class Node
 	{
+		public virtual void Update()
+		{
+			Debug.Log(this.GetType());
+		}
 	}
+
+	public class RepeatForever : Node
+	{
+
+	}
+
+	public class PrintNode : Node
+	{
+		
+	}
+
+	/*public class Sequence : Node
+	{
+
+	}
+
+	public class LambdaNode : Node
+	{
+		
+	}*/
 
 	public struct EntityRuntime : IComponentData
 	{
@@ -23,16 +47,17 @@ namespace Sharvey.ECS.BehaviourTree
 		private struct UpdateLayerJob : IJobParallelFor
 		{
 			[ReadOnly] public BehaviourTree Tree;
-			[ReadOnly] public int Layer;
+			[ReadOnly] public int StartNode, EndNode;
+			public ComponentDataArray<EntityRuntime> Runtime;
 
-			public unsafe void Execute()
-			{
-				Debug.Log($"wtf {Tree.Data[0]}");
-			}
+			//public unsafe void Execute()
+			//{
+			//	Debug.Log($"wtf {Tree.Data[0]}");
+			//}
 
 			public void Execute(int index)
 			{
-				Debug.Log($"wtf {Tree.Data[index]}");
+				Debug.Log($"wtf {Tree.Layers[index]}");
 			}
 		}
 
@@ -52,16 +77,17 @@ namespace Sharvey.ECS.BehaviourTree
 			List<BehaviourTree> trees = new List<BehaviourTree>();
 			EntityManager.GetAllUniqueSharedComponentDatas<BehaviourTree>(trees);
 
-			for (int i=1; i<trees.Count; ++i)
+			for (int treeIdx=1; treeIdx<trees.Count; ++treeIdx)
 			{
-				_group.SetFilter(trees[i]);
-				Debug.Log($"Length :{_group.CalculateLength()}");
-				
+				var tree = trees[treeIdx];
+				_group.SetFilter(tree);
+
 				inputDeps = new UpdateLayerJob
 				{
-					Tree = trees[i],
-					Layer = 0,
-				}.Schedule(trees[i].Data.Length, 0xFF, inputDeps);
+					Tree = trees[treeIdx],
+					StartNode = 0,
+					Runtime = _group.GetComponentDataArray<EntityRuntime>(),
+				}.Schedule(tree.Layers.Length, 0xFF, inputDeps);
 			}
 
 			return base.OnUpdate(inputDeps);

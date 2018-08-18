@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using Unity.Collections;
@@ -20,12 +21,20 @@ namespace Sharvey.ECS.BehaviourTree
 	public struct BehaviourTree : ISharedComponentData, IDisposable
 	{
 		//public NativeArraySharedValues<int> What;
-		public NativeArray<int> Data;
+		[ReadOnly] public int NodeDataSize;
+		//[ReadOnly] public NativeArray<int> Data;
+		[ReadOnly] public NativeArray<int> Layers;
+		[ReadOnly] public NativeArray<GCHandle> Nodes;
 
 		public void Dispose()
 		{
-			if (Data.IsCreated)
-			Data.Dispose();
+			/*if (Data.IsCreated)
+			Data.Dispose();*/
+		}
+
+		public Node GetNode(int layer, int index)
+		{
+			return null;
 		}
 	}
 }

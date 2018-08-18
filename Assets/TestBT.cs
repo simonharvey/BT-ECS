@@ -13,11 +13,20 @@ public class TestBT : MonoBehaviour
 	{
 		var man = World.Active.GetOrCreateManager<EntityManager>();
 
-		var _tree = new BehaviourTree
+		/*var _tree = new BehaviourTree
 		{
 			Data = new NativeArray<int>(new[] { 666, 123 }, Allocator.Persistent),
-		};
-		//var tree2 = new BehaviourTree();
+		};*/
+
+		_tree = BehaviourTreeBuilder.Compile(
+			new NodeBuilder(new RepeatForever())
+				.CreateChild(new PrintNode()).End()
+				.CreateChild(new PrintNode()).End()
+				.CreateChild(new PrintNode()).End()
+				.CreateChild(new PrintNode()).End()
+				.CreateChild(new PrintNode()).End()
+			.End()
+		);
 
 		for (int i=0; i<0xFF; ++i)
 		{
@@ -28,6 +37,14 @@ public class TestBT : MonoBehaviour
 
 			});
 		}
+
+		//var bt = BehaviourTreeBuilder.Compile(
+		//	new NodeBuilder(new RepeatForever())
+		//	.CreateChild(new Sequence())
+		//		.CreateChild(new PrintNode()).End()
+		//		.CreateChild(new PrintNode()).End()
+		//	.End()
+		//);
 	}
 
 	private void OnDestroy()

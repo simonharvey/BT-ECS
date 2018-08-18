@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using Unity.Collections;
 
 namespace Sharvey.ECS.BehaviourTree
 {
@@ -11,8 +13,25 @@ namespace Sharvey.ECS.BehaviourTree
 		public readonly Node Node;
 		public readonly NodeBuilder Parent;
 		public List<NodeBuilder> Children;
+		public int ChildCount => Children?.Count ?? 0;
+		public int TreeCount
+		{
+			get
+			{
+				if (ChildCount == 0)
+					return 1;
 
-		public NodeBuilder(Node node = null, NodeBuilder parent = null)
+				int count = 1;
+				foreach (var c in Children)
+				{
+					count += c.TreeCount;
+				}
+
+				return count;
+			}
+		}
+
+		public NodeBuilder(Node node, NodeBuilder parent = null)
 		{
 			Node = node;
 			Parent = parent;
@@ -33,15 +52,42 @@ namespace Sharvey.ECS.BehaviourTree
 
 		public NodeBuilder End()
 		{
-			return Parent;
+			return Parent ?? this;
 		}
 	}
 
 	public class BehaviourTreeBuilder
 	{
-		public BehaviourTree Compile()
+		public static BehaviourTree Compile(NodeBuilder root)
 		{
-			return default(BehaviourTree);
+			var layers = new List<int>();
+
+			var open = new List<NodeBuilder>();
+			var nodes = new List<GCHandle>();
+			open.Add(root);
+
+			while (open.Count > 0)
+			{
+				layers.Add(open.Count);
+				var layerNodes = open.ToArray();
+				open.Clear();
+				foreach (var n in layerNodes)
+				{
+					nodes.Add(GCHandle.Alloc(n.Node));
+					if (n.ChildCount > 0)
+					{
+						open.AddRange(n.Children);
+					}
+				}
+			}
+
+			var bt = new BehaviourTree
+			{
+				Nodes = new NativeArray<GCHandle>(nodes.ToArray(), Allocator.Persistent),
+				Layers = new NativeArray<int>(layers.ToArray(), Allocator.Persistent),
+			};
+
+			return bt;
 		}
 	}
 }
