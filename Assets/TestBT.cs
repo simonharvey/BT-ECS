@@ -18,13 +18,17 @@ public class TestBT : MonoBehaviour
 			Data = new NativeArray<int>(new[] { 666, 123 }, Allocator.Persistent),
 		};*/
 
+		var alloc = new BehaviourTreeAllocator();
+
 		_tree = BehaviourTreeBuilder.Compile(
 			new NodeBuilder(new RepeatForever())
-				.CreateChild(new PrintNode()).End()
-				.CreateChild(new PrintNode()).End()
-				.CreateChild(new PrintNode()).End()
-				.CreateChild(new PrintNode()).End()
-				.CreateChild(new PrintNode()).End()
+				.CreateChild(new Sequence())
+					.CreateChild(new PrintNode()).End()
+					.CreateChild(new PrintNode()).End()
+					.CreateChild(new PrintNode()).End()
+					.CreateChild(new PrintNode()).End()
+					.CreateChild(new PrintNode()).End()
+				.End()
 			.End()
 		);
 
@@ -34,7 +38,7 @@ public class TestBT : MonoBehaviour
 			man.AddSharedComponentData(e, _tree);
 			man.AddComponentData(e, new EntityRuntime
 			{
-
+				//Data = _tree.CreateRuntimeData(),
 			});
 		}
 

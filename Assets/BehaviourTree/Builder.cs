@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using Unity.Collections;
+using UnityEngine;
 
 namespace Sharvey.ECS.BehaviourTree
 {
@@ -58,13 +59,16 @@ namespace Sharvey.ECS.BehaviourTree
 
 	public class BehaviourTreeBuilder
 	{
-		public static BehaviourTree Compile(NodeBuilder root)
+		public static BehaviourTree Compile(NodeBuilder root, int memSize = 0xFFFFFF)
 		{
 			var layers = new List<int>();
 
 			var open = new List<NodeBuilder>();
 			var nodes = new List<GCHandle>();
+			var dataOff = new List<int>();
+
 			open.Add(root);
+			var off = 0;
 
 			while (open.Count > 0)
 			{
@@ -73,7 +77,10 @@ namespace Sharvey.ECS.BehaviourTree
 				open.Clear();
 				foreach (var n in layerNodes)
 				{
+					dataOff.Add(off);
+					off += n.Node.DataSize;
 					nodes.Add(GCHandle.Alloc(n.Node));
+
 					if (n.ChildCount > 0)
 					{
 						open.AddRange(n.Children);
@@ -85,7 +92,12 @@ namespace Sharvey.ECS.BehaviourTree
 			{
 				Nodes = new NativeArray<GCHandle>(nodes.ToArray(), Allocator.Persistent),
 				Layers = new NativeArray<int>(layers.ToArray(), Allocator.Persistent),
+				NodeDataOffset = new NativeArray<int>(dataOff.ToArray(), Allocator.Persistent),
+				//Memory = new NativeArray<byte>(memSize, Allocator.Persistent),
+				RuntimeDataSize = off,
 			};
+
+			Debug.Log($"Tree RuntimeSize: {bt.RuntimeDataSize}");
 
 			return bt;
 		}
