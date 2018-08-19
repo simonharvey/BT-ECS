@@ -25,11 +25,11 @@ public class TestBT : MonoBehaviour
 		_tree = BehaviourTreeBuilder.Compile(
 			new NodeBuilder(new RepeatForever())
 				.CreateChild(new Sequence())
-					.CreateChild(new PrintNode()).End()
-					.CreateChild(new PrintNode()).End()
-					.CreateChild(new PrintNode()).End()
-					.CreateChild(new PrintNode()).End()
-					.CreateChild(new PrintNode()).End()
+					.CreateChild(new PrintNode("A")).End()
+					.CreateChild(new PrintNode("B")).End()
+					.CreateChild(new PrintNode("C")).End()
+					.CreateChild(new PrintNode("D")).End()
+					.CreateChild(new PrintNode("E")).End()
 				.End()
 			.End()
 		);

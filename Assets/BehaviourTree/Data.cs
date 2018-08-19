@@ -22,6 +22,14 @@ namespace Sharvey.ECS.BehaviourTree
 		Failed
 	}
 
+	static class NodeStateExt
+	{
+		public static bool Running(this NodeState state)
+		{
+			return state == NodeState.Activating || state == NodeState.Active;
+		}
+	}
+
 	public unsafe class BehaviourTreeAllocator : IDisposable
 	{
 		private NativeArray<byte> _buffer;

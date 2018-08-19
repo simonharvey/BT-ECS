@@ -28,9 +28,9 @@ namespace Sharvey.ECS.BehaviourTree
 	public class Node
 	{
 		public virtual int DataSize => 0;
-		public virtual void Update(NodeRuntimeHandle handle)
+		public virtual void Update(NodeRuntimeHandle handle, float dt)
 		{
-			Debug.Log("update " + this);
+			//Debug.Log("update " + this);
 		}
 	}
 
@@ -42,27 +42,59 @@ namespace Sharvey.ECS.BehaviourTree
 
 	public class RepeatForever : Node
 	{
-		public override void Update(NodeRuntimeHandle handle)
+		public override void Update(NodeRuntimeHandle handle, float dt)
 		{
-			base.Update(handle);
+			base.Update(handle, dt);
 			for (int i=0; i<handle.ChildCount; ++i)
 			{
-				handle.ActivateChild(i);
+				if (!handle.ChildState(i).Running())
+				{
+					handle.ActivateChild(i);
+				}
 			}
 		}
 	}
 
 	public class PrintNode : Node
 	{
-		
+		public readonly string Value;
+		public PrintNode(string value)
+		{
+			this.Value = value;
+		}
 	}
 
-	public class Sequence : NodeWithData<int>
+	public class DelayNode : NodeWithData<float>
 	{
-		public override void Update(NodeRuntimeHandle handle)
-		{
-			base.Update(handle);
+		public readonly float Delay;
 
+		public DelayNode(float delay)
+		{
+			Delay = delay;
+		}
+
+		public override void Update(NodeRuntimeHandle handle, float dt)
+		{
+			base.Update(handle, dt);
+		}
+	}
+
+	public unsafe class Sequence : NodeWithData<int>
+	{
+		public override void Update(NodeRuntimeHandle handle, float dt)
+		{
+			base.Update(handle, dt);
+			int* dataPtr = (int*)handle.GetDataPtr();
+			if (handle.State == NodeState.Activating)
+			{
+				*dataPtr = 0;
+				handle.State = NodeState.Active;
+			}
+			else
+			{
+				*dataPtr = *dataPtr + 1;
+				//Debug.Log($"Sequence {*dataPtr}");
+			}
 		}
 	}
 	
@@ -110,6 +142,11 @@ namespace Sharvey.ECS.BehaviourTree
 			var ptr = Runtime.Data + Tree.StateOffset(nodeIdx);
 			*((NodeState*)ptr) = NodeState.Activating;
 		}
+
+		public IntPtr GetDataPtr()
+		{
+			return Runtime.Data + Tree.NodeDataOffset[NodeIndex];
+		}
 	}
 
 	public class BehaviourTreeSystem : JobComponentSystem
@@ -118,6 +155,7 @@ namespace Sharvey.ECS.BehaviourTree
 		{
 			[ReadOnly] public BehaviourTree Tree;
 			[ReadOnly] public int StartNode;//, EndNode;
+			[ReadOnly] public float Dt;
 			[ReadOnly] public ComponentDataArray<BehaviourTreeRuntime> Runtime;
 
 			public void Execute(int index)
@@ -131,9 +169,9 @@ namespace Sharvey.ECS.BehaviourTree
 					var r = Runtime[i];
 					var handle = Tree.GetHandle(r, StartNode + index);
 					var s = handle.State;
-					if (s == NodeState.Activating || s == NodeState.Active)
+					if (s.Running())
 					{
-						node.Update(handle);
+						node.Update(handle, Dt);
 					}
 				}
 			}
@@ -175,7 +213,7 @@ namespace Sharvey.ECS.BehaviourTree
 					{
 						Tree = _trees[treeIdx],
 						StartNode = start,
-						//EndNode = end,
+						Dt = dt,
 						Runtime = _group.GetComponentDataArray<BehaviourTreeRuntime>(),
 					}.Schedule(end - start, 1, inputDeps);
 
