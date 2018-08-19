@@ -5,21 +5,23 @@ using Unity.Collections;
 using Unity.Entities;
 using UnityEngine;
 
+class Foo : IComponentData
+{
+
+}
+
 public class TestBT : MonoBehaviour
 {
 	BehaviourTree _tree;
-	
+
+	private void TestMulti()
+	{
+
+	}
+
 	private void Start()
 	{
 		var man = World.Active.GetOrCreateManager<EntityManager>();
-
-		/*var _tree = new BehaviourTree
-		{
-			Data = new NativeArray<int>(new[] { 666, 123 }, Allocator.Persistent),
-		};*/
-
-		var alloc = new BehaviourTreeAllocator();
-
 		_tree = BehaviourTreeBuilder.Compile(
 			new NodeBuilder(new RepeatForever())
 				.CreateChild(new Sequence())
@@ -32,23 +34,12 @@ public class TestBT : MonoBehaviour
 			.End()
 		);
 
-		for (int i=0; i<10000; ++i)
+		for (int i = 0; i < 1; ++i)
 		{
 			var e = man.CreateEntity();
-			man.AddSharedComponentData(e, _tree);
-			man.AddComponentData(e, new EntityRuntime
-			{
-				//Data = _tree.CreateRuntimeData(),
-			});
+			var rt = _tree.Register(man, e);
+			_tree.GetHandle(rt, 0).SetState(NodeState.Activating);
 		}
-
-		//var bt = BehaviourTreeBuilder.Compile(
-		//	new NodeBuilder(new RepeatForever())
-		//	.CreateChild(new Sequence())
-		//		.CreateChild(new PrintNode()).End()
-		//		.CreateChild(new PrintNode()).End()
-		//	.End()
-		//);
 	}
 
 	private void OnDestroy()

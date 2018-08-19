@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -7,6 +8,8 @@ using System.Threading.Tasks;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
+using UnityEngine;
+using UnityEngine.Assertions;
 
 namespace Sharvey.ECS.BehaviourTree
 {
@@ -19,20 +22,24 @@ namespace Sharvey.ECS.BehaviourTree
 		Failed
 	}
 
-	public class BehaviourTreeAllocator : IDisposable
+	public unsafe class BehaviourTreeAllocator : IDisposable
 	{
 		private NativeArray<byte> _buffer;
 		private int _dataSize;
+		private int _off = 0;
 
 		public BehaviourTreeAllocator(int dataSize, int capacity=0xFFFF)
 		{
+			//Debug.Log($"BehaviourTreeAllocator {dataSize}");
 			_dataSize = dataSize;
-			_buffer = new NativeArray<byte>(capacity, Allocator.Persistent);
+			_buffer = new NativeArray<byte>(capacity, Allocator.Persistent, NativeArrayOptions.ClearMemory);
 		}
 
-		public NativeArray<byte> Create()
+		public IntPtr Create()
 		{
-			return default(NativeArray<byte>);
+			var ptr = new IntPtr(_buffer.GetUnsafePtr()) + _off;
+			_off += _dataSize;
+			return ptr;
 		}
 
 		public void Dispose()
@@ -41,30 +48,28 @@ namespace Sharvey.ECS.BehaviourTree
 		}
 	}
 
-	public struct TypedPtr<T>
+	public unsafe struct BehaviourTree : ISharedComponentData, IDisposable
 	{
+		[DebuggerDisplay("Node [{FirstChildIndex}, {ChildCount}]")]
+		public struct FlatNode
+		{
+			public readonly int ChildCount;
+			public readonly int FirstChildIndex;
 
-	}
+			public FlatNode(int childCount, int firstChildIndex)
+			{
+				ChildCount = childCount;
+				FirstChildIndex = firstChildIndex;
+			}
+		}
 
-	public struct TreeData
-	{
 		[ReadOnly] public int RuntimeDataSize;
 		[ReadOnly] public NativeArray<int> Layers;
 		[ReadOnly] public NativeArray<GCHandle> Nodes;
 		[ReadOnly] public NativeArray<int> NodeDataOffset;
-	}
-
-	public struct BehaviourTree : ISharedComponentData, IDisposable
-	{
-		[ReadOnly] public int RuntimeDataSize;
-		[ReadOnly] public NativeArray<int> Layers;
-		[ReadOnly] public NativeArray<GCHandle> Nodes;
-		[ReadOnly] public NativeArray<int> NodeDataOffset;
+		[ReadOnly] public NativeArray<FlatNode> Structure;
 
 		[ReadOnly] public GCHandle Allocator;
-
-		//public NativeArray<byte> Memory;
-		//private int _memOffset; // replace with smarter heap allocator. this changes equality...
 
 		public void Dispose()
 		{
@@ -73,27 +78,32 @@ namespace Sharvey.ECS.BehaviourTree
 			//Memory.Dispose();
 		}
 
-		public Node GetNode(int layer, int index)
+		public int StateOffset(int nodeIdx)
 		{
-			return null;
+			return UnsafeUtility.SizeOf<NodeState>() * nodeIdx;
 		}
 
-		public unsafe NativeArray<byte> CreateRuntimeData()
+		public NodeRuntimeHandle GetHandle(BehaviourTreeRuntime btr, int nodeIdx)
 		{
-			return ((BehaviourTreeAllocator)Allocator.Target).Create();
-			//var ptr = new IntPtr(Memory.GetUnsafePtr()) + _memOffset;
-			////_memOffset += RuntimeDataSize;
-			//return ptr;
+			return new NodeRuntimeHandle
+			{
+				Tree = this,
+				NodeIndex = nodeIdx,
+				Runtime = btr,
+			};
 		}
 
-		/*public unsafe NativeArray<byte> CreateEntityData()
+		public BehaviourTreeRuntime Register(EntityManager manager, Entity e)
 		{
-			var data = NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<byte>(
-				(new IntPtr(Memory.GetUnsafePtr()) + _memOffset).ToPointer(), 
-				RuntimeDataSize, 
-				Allocator.None);
-			//_memOffset += RuntimeDataSize;
-			return data;
-		}*/
+			var alloc = (BehaviourTreeAllocator)Allocator.Target;
+			Assert.IsNotNull(alloc);
+			manager.AddSharedComponentData(e, this);
+			var btr = new BehaviourTreeRuntime
+			{
+				Data = alloc.Create(),
+			};
+			manager.AddComponentData(e, btr);
+			return btr;
+		}
 	}
 }

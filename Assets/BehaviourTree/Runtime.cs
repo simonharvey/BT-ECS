@@ -15,10 +15,23 @@ namespace Sharvey.ECS.BehaviourTree
 		NodeState State;
 	}
 
+	/*public interface INode
+	{
+		int DataSize { get; }
+	}
+
+	public class BaseNode<T> where T : NodeData
+	{
+
+	}*/
+
 	public class Node
 	{
 		public virtual int DataSize => 0;
-		//public virtual void Update()
+		public virtual void Update(NodeRuntimeHandle handle)
+		{
+			Debug.Log("update " + this);
+		}
 	}
 
 	public class NodeWithData<T> : Node
@@ -29,7 +42,14 @@ namespace Sharvey.ECS.BehaviourTree
 
 	public class RepeatForever : Node
 	{
-
+		public override void Update(NodeRuntimeHandle handle)
+		{
+			base.Update(handle);
+			for (int i=0; i<handle.ChildCount; ++i)
+			{
+				handle.ActivateChild(i);
+			}
+		}
 	}
 
 	public class PrintNode : Node
@@ -39,12 +59,57 @@ namespace Sharvey.ECS.BehaviourTree
 
 	public class Sequence : NodeWithData<int>
 	{
+		public override void Update(NodeRuntimeHandle handle)
+		{
+			base.Update(handle);
 
+		}
 	}
 	
-	public struct EntityRuntime : IComponentData
+	public struct BehaviourTreeRuntime : IComponentData
 	{
-		public /*NativeArray<byte>*/ IntPtr Data;
+		public IntPtr Data;
+	}
+
+	public unsafe struct NodeRuntimeHandle
+	{
+		public BehaviourTreeRuntime Runtime;
+		public BehaviourTree Tree;
+		public int NodeIndex;
+
+		public NodeState State
+		{
+			get => *(NodeState*)(Runtime.Data + Tree.StateOffset(NodeIndex));
+			set => *(NodeState*)(Runtime.Data + Tree.StateOffset(NodeIndex)) = value;
+		}
+		// this is just to bypass temporary struct errors when calling Tree.GetHandle(rt, i).State
+		public void SetState(NodeState state)
+		{
+			this.State = state;
+		}
+
+		public int ChildCount
+		{
+			get => Tree.Structure[NodeIndex].ChildCount;
+		}
+
+		public int ChildIndex(int idx)
+		{
+			return Tree.Structure[NodeIndex].FirstChildIndex + idx;
+		}
+
+		public NodeState ChildState(int idx)
+		{
+			var statePtr = Runtime.Data + Tree.StateOffset(ChildIndex(idx));
+			return *(NodeState*)statePtr;
+		}
+
+		public void ActivateChild(int idx)
+		{
+			var nodeIdx = ChildIndex(idx);
+			var ptr = Runtime.Data + Tree.StateOffset(nodeIdx);
+			*((NodeState*)ptr) = NodeState.Activating;
+		}
 	}
 
 	public class BehaviourTreeSystem : JobComponentSystem
@@ -52,46 +117,49 @@ namespace Sharvey.ECS.BehaviourTree
 		private struct UpdateLayerJob : IJobParallelFor
 		{
 			[ReadOnly] public BehaviourTree Tree;
-			[ReadOnly] public int StartNode, EndNode;
-			[ReadOnly] public ComponentDataArray<EntityRuntime> Runtime;
+			[ReadOnly] public int StartNode;//, EndNode;
+			[ReadOnly] public ComponentDataArray<BehaviourTreeRuntime> Runtime;
 
 			public void Execute(int index)
 			{
-				var node = (Node)Tree.Nodes[index].Target;
+				//Debug.Log($"Execute: {StartNode} {index}");
+
+				var node = (Node)Tree.Nodes[StartNode + index].Target;
 				var dataOffset = Tree.NodeDataOffset[index];
-				//Tree.Allocator
-				//Debug.Log($"Execute {StartNode} {EndNode} {node.GetType()}");
-				for (int i=0; i<Runtime.Length; ++i)
+				for (int i = 0; i < Runtime.Length; ++i)
 				{
 					var r = Runtime[i];
-					//node.Update();	
+					var handle = Tree.GetHandle(r, StartNode + index);
+					var s = handle.State;
+					if (s == NodeState.Activating || s == NodeState.Active)
+					{
+						node.Update(handle);
+					}
 				}
-				//Debug.Log($"wtf {Tree.Layers[index]}");
 			}
 		}
 
 		private ComponentGroup _group;
+		List<BehaviourTree> _trees = new List<BehaviourTree>();
 
 		protected override void OnCreateManager(int capacity)
 		{
 			base.OnCreateManager(capacity);
 			_group = GetComponentGroup(
 				ComponentType.ReadOnly(typeof(BehaviourTree)),
-				typeof(EntityRuntime)
+				typeof(BehaviourTreeRuntime)
 			);
 		}
 
 		protected override JobHandle OnUpdate(JobHandle inputDeps)
 		{
-			List<BehaviourTree> trees = new List<BehaviourTree>();
-			EntityManager.GetAllUniqueSharedComponentDatas<BehaviourTree>(trees);
+			_trees.Clear();
+			EntityManager.GetAllUniqueSharedComponentDatas<BehaviourTree>(_trees);
 			var dt = Time.deltaTime;
 
-			//Debug.Log(trees.Count);
-
-			for (int treeIdx=1; treeIdx<trees.Count; ++treeIdx)
+			for (int treeIdx=1; treeIdx<_trees.Count; ++treeIdx)
 			{
-				var tree = trees[treeIdx];
+				var tree = _trees[treeIdx];
 				_group.SetFilter(tree);
 
 				var end = tree.Nodes.Length;
@@ -105,13 +173,13 @@ namespace Sharvey.ECS.BehaviourTree
 
 					inputDeps = new UpdateLayerJob
 					{
-						Tree = trees[treeIdx],
+						Tree = _trees[treeIdx],
 						StartNode = start,
-						EndNode = end,
-						Runtime = _group.GetComponentDataArray<EntityRuntime>(),
-					}.Schedule(tree.Layers.Length, 0xFF, inputDeps);
+						//EndNode = end,
+						Runtime = _group.GetComponentDataArray<BehaviourTreeRuntime>(),
+					}.Schedule(end - start, 1, inputDeps);
 
-					end = start - 1;
+					end = start;
 				}
 			}
 

@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 
 namespace Sharvey.ECS.BehaviourTree
@@ -66,23 +67,35 @@ namespace Sharvey.ECS.BehaviourTree
 			var open = new List<NodeBuilder>();
 			var nodes = new List<GCHandle>();
 			var dataOff = new List<int>();
+			var structure = new NativeArray<BehaviourTree.FlatNode>(root.TreeCount, Allocator.Persistent);
 
 			open.Add(root);
-			var off = 0;
+			var off = UnsafeUtility.SizeOf<NodeState>() * root.TreeCount;
+			int nodeIdx = 0;
 
 			while (open.Count > 0)
 			{
 				layers.Add(open.Count);
+
 				var layerNodes = open.ToArray();
 				open.Clear();
+
+				var childPos = nodeIdx + layerNodes.Length;
+
 				foreach (var n in layerNodes)
 				{
 					dataOff.Add(off);
 					off += n.Node.DataSize;
 					nodes.Add(GCHandle.Alloc(n.Node));
+					structure[nodeIdx] = new BehaviourTree.FlatNode(
+						n.ChildCount,
+						n.ChildCount > 0 ? childPos : -1
+					);
+					++nodeIdx;
 
 					if (n.ChildCount > 0)
 					{
+						childPos += n.ChildCount;
 						open.AddRange(n.Children);
 					}
 				}
@@ -93,8 +106,10 @@ namespace Sharvey.ECS.BehaviourTree
 				Nodes = new NativeArray<GCHandle>(nodes.ToArray(), Allocator.Persistent),
 				Layers = new NativeArray<int>(layers.ToArray(), Allocator.Persistent),
 				NodeDataOffset = new NativeArray<int>(dataOff.ToArray(), Allocator.Persistent),
-				//Memory = new NativeArray<byte>(memSize, Allocator.Persistent),
+				Structure = structure,
+				Allocator = GCHandle.Alloc(new BehaviourTreeAllocator(off)),
 				RuntimeDataSize = off,
+				//Memory = new NativeArray<byte>(memSize, Allocator.Persistent),
 			};
 
 			Debug.Log($"Tree RuntimeSize: {bt.RuntimeDataSize}");
