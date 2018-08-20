@@ -34,7 +34,7 @@ public class TestBT : MonoBehaviour
 			.End()
 		);
 
-		for (int i = 0; i < 1; ++i)
+		for (int i = 0; i < 10000; ++i)
 		{
 			var e = man.CreateEntity();
 			var rt = _tree.Register(man, e);

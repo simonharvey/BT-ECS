@@ -13,7 +13,7 @@ using UnityEngine.Assertions;
 
 namespace Sharvey.ECS.BehaviourTree
 {
-	public enum NodeState
+	public enum NodeState : byte
 	{
 		Inactive,
 		Activating,
@@ -36,7 +36,7 @@ namespace Sharvey.ECS.BehaviourTree
 		private int _dataSize;
 		private int _off = 0;
 
-		public BehaviourTreeAllocator(int dataSize, int capacity=0xFFFF)
+		public BehaviourTreeAllocator(int dataSize, int capacity=0xFFFFFF)
 		{
 			//Debug.Log($"BehaviourTreeAllocator {dataSize}");
 			_dataSize = dataSize;
@@ -45,6 +45,7 @@ namespace Sharvey.ECS.BehaviourTree
 
 		public IntPtr Create()
 		{
+			Assert.IsTrue(_buffer.Length >= _off);
 			var ptr = new IntPtr(_buffer.GetUnsafePtr()) + _off;
 			_off += _dataSize;
 			return ptr;
@@ -81,9 +82,20 @@ namespace Sharvey.ECS.BehaviourTree
 
 		public void Dispose()
 		{
-			/*if (Data.IsCreated)
-			Data.Dispose();*/
-			//Memory.Dispose();
+			var alloc = (BehaviourTreeAllocator)Allocator.Target;
+			alloc.Dispose();
+			Allocator.Free();
+
+			Layers.Dispose();
+
+			foreach (var node in Nodes)
+			{
+				node.Free();
+			}
+			Nodes.Dispose();
+
+			NodeDataOffset.Dispose();
+			Structure.Dispose();
 		}
 
 		public int StateOffset(int nodeIdx)
@@ -93,11 +105,12 @@ namespace Sharvey.ECS.BehaviourTree
 
 		public NodeRuntimeHandle GetHandle(BehaviourTreeRuntime btr, int nodeIdx)
 		{
+			//return default(NodeRuntimeHandle);
 			return new NodeRuntimeHandle
 			{
 				Tree = this,
 				NodeIndex = nodeIdx,
-				Runtime = btr,
+				TreeData = btr.Data,
 			};
 		}
 

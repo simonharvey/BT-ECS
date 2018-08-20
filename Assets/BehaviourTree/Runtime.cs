@@ -7,6 +7,7 @@ using Unity.Collections;
 using System;
 using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine.Assertions;
+using Unity.Burst;
 
 namespace Sharvey.ECS.BehaviourTree
 {
@@ -62,9 +63,16 @@ namespace Sharvey.ECS.BehaviourTree
 		{
 			this.Value = value;
 		}
+
+		public override void Update(NodeRuntimeHandle handle, float dt)
+		{
+			base.Update(handle, dt);
+			//Debug.Log(Value);
+			handle.State = NodeState.Complete;
+		}
 	}
 
-	public class DelayNode : NodeWithData<float>
+	public unsafe class DelayNode : NodeWithData<float>
 	{
 		public readonly float Delay;
 
@@ -76,6 +84,20 @@ namespace Sharvey.ECS.BehaviourTree
 		public override void Update(NodeRuntimeHandle handle, float dt)
 		{
 			base.Update(handle, dt);
+			float* remaining = (float*)handle.GetDataPtr();
+			if (handle.State == NodeState.Activating)
+			{
+				*remaining = Delay;
+				handle.State = NodeState.Active;
+			}
+			else
+			{
+				*remaining -= Delay;
+				if (*remaining <= 0)
+				{
+					handle.State = NodeState.Complete;
+				}
+			}
 		}
 	}
 
@@ -84,7 +106,37 @@ namespace Sharvey.ECS.BehaviourTree
 		public override void Update(NodeRuntimeHandle handle, float dt)
 		{
 			base.Update(handle, dt);
-			int* dataPtr = (int*)handle.GetDataPtr();
+
+			var activeIdx = (int*)handle.Data;
+
+			if (handle.State == NodeState.Activating)
+			{
+				*activeIdx = 0;
+				handle.State = NodeState.Active;
+				handle.ActivateChild(0);
+			}
+			else
+			{
+				var activeChildState = handle.ChildState(*activeIdx);
+				if (activeChildState == NodeState.Complete)
+				{
+					++(*activeIdx);
+					if (*activeIdx >= handle.ChildCount)
+					{
+						handle.State = NodeState.Complete;
+					}
+					else
+					{
+						handle.ActivateChild(*activeIdx);
+					}
+				}
+				else
+				{
+					handle.State = activeChildState;
+				}
+			}
+
+			/*int* dataPtr = (int*)handle.GetDataPtr();
 			if (handle.State == NodeState.Activating)
 			{
 				*dataPtr = 0;
@@ -93,8 +145,7 @@ namespace Sharvey.ECS.BehaviourTree
 			else
 			{
 				*dataPtr = *dataPtr + 1;
-				//Debug.Log($"Sequence {*dataPtr}");
-			}
+			}*/
 		}
 	}
 	
@@ -105,14 +156,14 @@ namespace Sharvey.ECS.BehaviourTree
 
 	public unsafe struct NodeRuntimeHandle
 	{
-		public BehaviourTreeRuntime Runtime;
+		public IntPtr TreeData;
 		public BehaviourTree Tree;
 		public int NodeIndex;
 
 		public NodeState State
 		{
-			get => *(NodeState*)(Runtime.Data + Tree.StateOffset(NodeIndex));
-			set => *(NodeState*)(Runtime.Data + Tree.StateOffset(NodeIndex)) = value;
+			get => *(NodeState*)(TreeData + Tree.StateOffset(NodeIndex));
+			set => *(NodeState*)(TreeData + Tree.StateOffset(NodeIndex)) = value;
 		}
 		// this is just to bypass temporary struct errors when calling Tree.GetHandle(rt, i).State
 		public void SetState(NodeState state)
@@ -132,25 +183,29 @@ namespace Sharvey.ECS.BehaviourTree
 
 		public NodeState ChildState(int idx)
 		{
-			var statePtr = Runtime.Data + Tree.StateOffset(ChildIndex(idx));
+			var statePtr = TreeData + Tree.StateOffset(ChildIndex(idx));
 			return *(NodeState*)statePtr;
 		}
 
 		public void ActivateChild(int idx)
 		{
 			var nodeIdx = ChildIndex(idx);
-			var ptr = Runtime.Data + Tree.StateOffset(nodeIdx);
+			var ptr = TreeData + Tree.StateOffset(nodeIdx);
 			*((NodeState*)ptr) = NodeState.Activating;
 		}
 
+		public IntPtr Data => TreeData + Tree.NodeDataOffset[NodeIndex];
+
 		public IntPtr GetDataPtr()
 		{
-			return Runtime.Data + Tree.NodeDataOffset[NodeIndex];
+			return Data;
 		}
 	}
 
+	//[BurstCompile]
 	public class BehaviourTreeSystem : JobComponentSystem
 	{
+		//[BurstCompile]
 		private struct UpdateLayerJob : IJobParallelFor
 		{
 			[ReadOnly] public BehaviourTree Tree;
@@ -164,15 +219,30 @@ namespace Sharvey.ECS.BehaviourTree
 
 				var node = (Node)Tree.Nodes[StartNode + index].Target;
 				var dataOffset = Tree.NodeDataOffset[index];
+				var handle = new NodeRuntimeHandle
+				{
+					NodeIndex = StartNode + index,
+					TreeData = IntPtr.Zero,
+					Tree = Tree,
+				};
 				for (int i = 0; i < Runtime.Length; ++i)
 				{
 					var r = Runtime[i];
-					var handle = Tree.GetHandle(r, StartNode + index);
+					handle.TreeData = r.Data;
+
+					// slowww
 					var s = handle.State;
 					if (s.Running())
 					{
 						node.Update(handle, Dt);
 					}
+
+					//var handle = Tree.GetHandle(r, StartNode + index);
+					//var s = handle.State;
+					//if (s.Running())
+					//{
+					//	node.Update(handle, Dt);
+					//}
 				}
 			}
 		}
@@ -199,7 +269,8 @@ namespace Sharvey.ECS.BehaviourTree
 			{
 				var tree = _trees[treeIdx];
 				_group.SetFilter(tree);
-
+				var runtimes = _group.GetComponentDataArray<BehaviourTreeRuntime>();
+				//Debug.Log(runtimes.Length);
 				var end = tree.Nodes.Length;
 				int iter = 0;
 				for (int i=tree.Layers.Length-1; i>=0; --i)
@@ -211,17 +282,17 @@ namespace Sharvey.ECS.BehaviourTree
 
 					inputDeps = new UpdateLayerJob
 					{
-						Tree = _trees[treeIdx],
+						Tree = tree,
 						StartNode = start,
 						Dt = dt,
-						Runtime = _group.GetComponentDataArray<BehaviourTreeRuntime>(),
+						Runtime = runtimes,
 					}.Schedule(end - start, 1, inputDeps);
 
 					end = start;
 				}
 			}
 
-			return base.OnUpdate(inputDeps);
+			return inputDeps;//base.OnUpdate(inputDeps);
 		}
 	}
 }
