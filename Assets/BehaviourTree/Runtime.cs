@@ -8,6 +8,7 @@ using System;
 using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine.Assertions;
 using Unity.Burst;
+using System.Diagnostics;
 
 namespace Sharvey.ECS.BehaviourTree
 {
@@ -26,16 +27,13 @@ namespace Sharvey.ECS.BehaviourTree
 
 	}*/
 
-	public class Node
+	public abstract class Node
 	{
 		public virtual int DataSize => 0;
-		public virtual void Update(NodeRuntimeHandle handle, float dt)
-		{
-			//Debug.Log("update " + this);
-		}
+		public abstract void Update(NodeRuntimeHandle handle, float dt);
 	}
 
-	public class NodeWithData<T> : Node
+	public abstract class NodeWithData<T> : Node
 		where T : struct
 	{
 		public override int DataSize => UnsafeUtility.SizeOf<T>();
@@ -45,7 +43,6 @@ namespace Sharvey.ECS.BehaviourTree
 	{
 		public override void Update(NodeRuntimeHandle handle, float dt)
 		{
-			base.Update(handle, dt);
 			for (int i=0; i<handle.ChildCount; ++i)
 			{
 				if (!handle.ChildState(i).Running())
@@ -65,9 +62,8 @@ namespace Sharvey.ECS.BehaviourTree
 		}
 
 		public override void Update(NodeRuntimeHandle handle, float dt)
-		{
-			base.Update(handle, dt);
-			//Debug.Log(Value);
+		{ 
+			//UnityEngine.Debug.Log(Value);
 			handle.State = NodeState.Complete;
 		}
 	}
@@ -83,7 +79,6 @@ namespace Sharvey.ECS.BehaviourTree
 
 		public override void Update(NodeRuntimeHandle handle, float dt)
 		{
-			base.Update(handle, dt);
 			float* remaining = (float*)handle.GetDataPtr();
 			if (handle.State == NodeState.Activating)
 			{
@@ -105,8 +100,6 @@ namespace Sharvey.ECS.BehaviourTree
 	{
 		public override void Update(NodeRuntimeHandle handle, float dt)
 		{
-			base.Update(handle, dt);
-
 			var activeIdx = (int*)handle.Data;
 
 			if (handle.State == NodeState.Activating)
@@ -206,6 +199,7 @@ namespace Sharvey.ECS.BehaviourTree
 	public class BehaviourTreeSystem : JobComponentSystem
 	{
 		//[BurstCompile]
+		[DebuggerDisplay("Update Layer {StartNode}")]
 		private struct UpdateLayerJob : IJobParallelFor
 		{
 			[ReadOnly] public BehaviourTree Tree;
@@ -247,6 +241,39 @@ namespace Sharvey.ECS.BehaviourTree
 			}
 		}
 
+		public struct NodesUpdateJob : IJobParallelFor
+		{
+			[ReadOnly] public BehaviourTree Tree;
+			[ReadOnly] public float Dt;
+			[ReadOnly] public int NodeIndex;
+			[ReadOnly] public ComponentDataArray<BehaviourTreeRuntime> Runtimes;
+			/*private Node _node;
+
+			public NodesUpdateJob Init()
+			{
+				_node = (Node)Tree.Nodes[NodeIndex].Target;
+				return this;
+			}*/
+
+			public unsafe void Execute(int index)
+			{
+				var handle = new NodeRuntimeHandle
+				{
+					NodeIndex = NodeIndex,
+					TreeData = Runtimes[index].Data,
+					Tree = Tree,
+				};
+
+				//var r = Runtimes[index];
+				//_node.Update(handle, Dt);
+
+				//var h = UnsafeUtility.ReadArrayElement<GCHandle>(Tree.Nodes.GetUnsafePtr(), NodeIndex);
+				//((Node)h.Target).Update(handle, Dt);
+				
+				((Node)Tree.Nodes[NodeIndex].Target).Update(handle, Dt);
+			}				
+		}
+
 		private ComponentGroup _group;
 		List<BehaviourTree> _trees = new List<BehaviourTree>();
 
@@ -273,7 +300,34 @@ namespace Sharvey.ECS.BehaviourTree
 				//Debug.Log(runtimes.Length);
 				var end = tree.Nodes.Length;
 				int iter = 0;
-				for (int i=tree.Layers.Length-1; i>=0; --i)
+
+				var prevLayerDeps = inputDeps;
+				
+				for (int i = tree.Layers.Length - 1; i >= 0; --i)
+				{
+					if (iter++ > 10)
+						break;
+
+					var start = end - tree.Layers[i];
+					var layerDeps = prevLayerDeps;
+					for (int j=start; j < end; ++j)
+					{
+						var h = new NodesUpdateJob
+						{
+							Dt = dt,
+							Runtimes = runtimes,
+							Tree = tree,
+							NodeIndex = j,
+						}.Schedule(runtimes.Length, 64, prevLayerDeps);
+						layerDeps = JobHandle.CombineDependencies(layerDeps, h);
+					}
+					end = start;
+					prevLayerDeps = JobHandle.CombineDependencies(prevLayerDeps, layerDeps);
+				}
+
+				inputDeps = prevLayerDeps;
+
+				/*for (int i=tree.Layers.Length-1; i>=0; --i)
 				{
 					if (iter++ > 10)
 						break;
@@ -289,7 +343,7 @@ namespace Sharvey.ECS.BehaviourTree
 					}.Schedule(end - start, 1, inputDeps);
 
 					end = start;
-				}
+				}*/
 			}
 
 			return inputDeps;//base.OnUpdate(inputDeps);

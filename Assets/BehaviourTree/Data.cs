@@ -74,6 +74,7 @@ namespace Sharvey.ECS.BehaviourTree
 
 		[ReadOnly] public int RuntimeDataSize;
 		[ReadOnly] public NativeArray<int> Layers;
+		[NativeDisableContainerSafetyRestriction]
 		[ReadOnly] public NativeArray<GCHandle> Nodes;
 		[ReadOnly] public NativeArray<int> NodeDataOffset;
 		[ReadOnly] public NativeArray<FlatNode> Structure;

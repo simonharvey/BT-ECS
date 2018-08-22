@@ -21,6 +21,8 @@ public class TestBT : MonoBehaviour
 
 	private void Start()
 	{
+		Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
+
 		var man = World.Active.GetOrCreateManager<EntityManager>();
 		_tree = BehaviourTreeBuilder.Compile(
 			new NodeBuilder(new RepeatForever())
