@@ -1,51 +1,51 @@
 ﻿using Sharvey.ECS.BehaviourTree;
 using System.Collections;
 using System.Collections.Generic;
-using Unity.Collections;
 using Unity.Entities;
 using UnityEngine;
 
-class Foo : IComponentData
+class FooNode : TNode<Vector3Int>
 {
+	public override void Update(NodeStateHandle state, ref Vector3Int value)
+	{
+		++value.x;
+	}
+}
 
+class BarNode : TNode<int>
+{
+	public override void Update(NodeStateHandle state, ref int value)
+	{
+		++value;
+	}
 }
 
 public class TestBT : MonoBehaviour
 {
-	BehaviourTree _tree;
-
-	private void TestMulti()
-	{
-
-	}
+	TreeRuntime _runtime;
 
 	private void Start()
 	{
 		Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
 
-		var man = World.Active.GetOrCreateManager<EntityManager>();
-		_tree = BehaviourTreeBuilder.Compile(
-			new NodeBuilder(new RepeatForever())
-				.CreateChild(new Sequence())
-					.CreateChild(new PrintNode("A")).End()
-					.CreateChild(new PrintNode("B")).End()
-					.CreateChild(new PrintNode("C")).End()
-					.CreateChild(new PrintNode("D")).End()
-					.CreateChild(new PrintNode("E")).End()
-				.End()
-			.End()
-		);
+		var N = 10000;
 
-		for (int i = 0; i < 10000; ++i)
+		var def = Builder.Compile(new NodeBuilder(new FooNode())
+			.CreateChild(new BarNode()).End()
+			.CreateChild(new BarNode()).End()
+		.End());
+		_runtime = TreeRuntime.Create(def, N);
+
+		var man = World.Active.GetOrCreateManager<EntityManager>();
+		for (int i = 0; i < N; ++i)
 		{
 			var e = man.CreateEntity();
-			var rt = _tree.Register(man, e);
-			_tree.GetHandle(rt, 0).SetState(NodeState.Activating);
+			_runtime.Register(man, e);
 		}
 	}
 
 	private void OnDestroy()
 	{
-		_tree.Dispose();
+		_runtime.Dispose();
 	}
 }

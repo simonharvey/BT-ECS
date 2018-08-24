@@ -7,12 +7,33 @@ using System;
 using Unity.Jobs;
 using Unity.Collections.LowLevel.Unsafe;
 using System.Linq;
+using System.Runtime.InteropServices;
+
+namespace TestDesign
+{
+
+public enum NodeState : byte
+{
+	Inactive,
+	Activating,
+	Active,
+	Complete,
+	Failed
+}
+
+static class NodeStateExt
+{
+	public static bool Running(this NodeState state)
+	{
+		return state == NodeState.Activating || state == NodeState.Active;
+	}
+}
 
 unsafe interface INode
 {
 	Type DataType { get; }
 
-	void Update(NativeSlice<byte> data);
+	void Update(NativeSlice<NodeState> state, NativeSlice<byte> data);
 }
 
 abstract class TNode<T> : INode
@@ -20,7 +41,7 @@ abstract class TNode<T> : INode
 {
 	public Type DataType => typeof(T);
 
-	public unsafe void Update(NativeSlice<byte> data)
+	public unsafe void Update(NativeSlice<NodeState> state, NativeSlice<byte> data)
 	{
 		var arr = data.SliceConvert<T>();
 		for (int i=0; i<arr.Length; ++i)
@@ -32,6 +53,12 @@ abstract class TNode<T> : INode
 	}
 
 	public abstract void Update(ref T value);
+}
+
+struct NodeExecutionHandle
+{
+	[ReadOnly] public readonly NativeSlice<NodeState> State;
+	[ReadOnly] public readonly TreeDef Def;
 }
 
 class FooNode : TNode<Vector3Int>
@@ -59,15 +86,23 @@ struct TreeDef
 
 struct TreeRuntimeComponentData : IComponentData
 {
-
+	public int Index;
 }
 
 struct TreeRuntime : ISharedComponentData, IDisposable
 {
+	private class AllocState
+	{
+		public int NextIndex;
+	}
+
 	[ReadOnly] public TreeDef Def;
-	NativeArray<byte> Data;
 	NativeArray<int> NodeDataOffset;
-	int Capacity;
+	// data and state should be in sync: index of an entity in the data has to be the same in the state array
+	NativeArray<byte> Data;
+	NativeArray<NodeState> State;
+	private int Capacity;
+	private GCHandle _allocHandle; 
 	
 	public static TreeRuntime Create(TreeDef tree, int capacity = 10)
 	{
@@ -76,8 +111,10 @@ struct TreeRuntime : ISharedComponentData, IDisposable
 			Def = tree,
 			Capacity = capacity,
 		};
-		rt.Data = new NativeArray<byte>(tree.Nodes.Sum(n => UnsafeUtility.SizeOf(n.DataType)) * capacity, Allocator.Persistent);
+		rt.Data = new NativeArray<byte>(tree.Nodes.Sum(n => UnsafeUtility.SizeOf(n.DataType)) * capacity, Allocator.Persistent, NativeArrayOptions.ClearMemory);
+		rt.State = new NativeArray<NodeState>(tree.Nodes.Length * capacity, Allocator.Persistent, NativeArrayOptions.ClearMemory);
 		rt.NodeDataOffset = new NativeArray<int>(tree.Nodes.Length, Allocator.Persistent);
+		rt._allocHandle = GCHandle.Alloc(new AllocState());
 		int off = 0;
 		for (int i=0; i<tree.Nodes.Length; ++i)
 		{
@@ -93,19 +130,39 @@ struct TreeRuntime : ISharedComponentData, IDisposable
 		return Data.Slice(NodeDataOffset[nodeIndex], UnsafeUtility.SizeOf(Def.Nodes[nodeIndex].DataType) * Capacity);
 	}
 
+	public TreeRuntimeComponentData Register(EntityManager manager, Entity e)
+	{
+		var rt = new TreeRuntimeComponentData
+		{
+			Index = ((AllocState)_allocHandle.Target).NextIndex++,
+		};
+		manager.AddSharedComponentData(e, this);
+		manager.AddComponentData(e, rt);
+		Activate(rt);
+		return rt;
+	}
+
+	private void Activate(TreeRuntimeComponentData e)
+	{
+		State[e.Index] = NodeState.Activating;
+	}
+
 	public void Dispose()
 	{
 		Data.Dispose();
 		NodeDataOffset.Dispose();
+		State.Dispose();
+		_allocHandle.Free();
 	}
 }
 
 unsafe class BTSystem : JobComponentSystem
 {
-	struct Job : IJob//, IJobParallelFor
+	struct Job : IJob
 	{
 		public struct ExecutionParams
 		{
+			public NativeSlice<NodeState> State;
 			public NativeSlice<byte> NodeData;
 		}
 
@@ -120,14 +177,9 @@ unsafe class BTSystem : JobComponentSystem
 
 		public void Execute()
 		{
-			Debug.Log($"Update {Node.DataType} {UnsafeUtility.SizeOf(Node.DataType)} {Params.NodeData.Length / UnsafeUtility.SizeOf(Node.DataType)}");
-			Node.Update(Params.NodeData);
+			//Debug.Log($"Update {Node.DataType} {UnsafeUtility.SizeOf(Node.DataType)} {Params.NodeData.Length / UnsafeUtility.SizeOf(Node.DataType)}");
+			Node.Update(Params.State, Params.NodeData);
 		}
-
-		/*public void Execute(int index)
-		{
-		
-		}*/
 	}
 
 	private ComponentGroup _group;
@@ -145,6 +197,7 @@ unsafe class BTSystem : JobComponentSystem
 	{
 		_trees.Clear();
 		EntityManager.GetAllUniqueSharedComponentDatas<TreeRuntime>(_trees);
+		//Debug.Log($"Num trees {_trees.Count}");
 
 		for (int treeIdx = 1; treeIdx < _trees.Count; ++treeIdx)
 		{
@@ -192,7 +245,8 @@ public class TestDesign : MonoBehaviour
 		for (int i=0; i<N; ++i)
 		{
 			var e = man.CreateEntity();
-			man.AddSharedComponentData(e, _runtime);
+			_runtime.Register(man, e);
+			//man.AddSharedComponentData(e, _runtime);
 		}
 	}
 
@@ -200,4 +254,6 @@ public class TestDesign : MonoBehaviour
 	{
 		_runtime.Dispose();
 	}
+}
+
 }
