@@ -20,9 +20,11 @@ class TreeNode<T>
 	public Type DataType => typeof(T);
 }*/
 
-interface INode
+unsafe interface INode
 {
 	Type DataType { get; }
+
+	void Update(NativeSlice<byte> data);
 }
 
 /*class Node : INode
@@ -34,15 +36,43 @@ interface INode
 	}
 }*/
 
-class TNode<T> : INode
+abstract class TNode<T> : INode
 	where T : struct
 {
 	public Type DataType => typeof(T);
+
+	public unsafe void Update(NativeSlice<byte> data)
+	{
+		//var sl = NativeSliceUnsafeUtility.ConvertExistingDataToNativeSlice<T>(data.GetUnsafePtr(), UnsafeUtility.SizeOf<T>(), 1);
+		//var arr = NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<T>(data.GetUnsafePtr(), data.Length / UnsafeUtility.SizeOf<T>(), Allocator.Invalid);
+		//NativeArrayUnsafeUtility.SetAtomicSafetyHandle(ref arr, NativeArrayUnsafeUtility.GetAtomicSafetyHandle<byte>(data.));
+		var arr = data.SliceConvert<T>();
+		for (int i=0; i<arr.Length; ++i)
+		{
+			var v = arr[i];
+			Update(ref v);
+			arr[i] = v;
+		}
+	}
+
+	public abstract void Update(ref T value);
 }
 
 class FooNode : TNode<Vector3Int>
 {
+	public override void Update(ref Vector3Int value)
+	{
+		++value.x;
+		//Debug.Log($"FooNode::Update {value}");
+	}
+}
 
+class BarNode : TNode<int>
+{
+	public override void Update(ref int value)
+	{
+		++value;
+	}
 }
 
 //
@@ -65,7 +95,7 @@ struct TreeRuntime : ISharedComponentData, IDisposable
 	int Capacity;
 	//NativeArray<NativeArray<byte>> Data;
 
-	public static TreeRuntime Create(TreeDef tree, int capacity = 10000)
+	public static TreeRuntime Create(TreeDef tree, int capacity = 10)
 	{
 		var rt = new TreeRuntime
 		{
@@ -131,6 +161,7 @@ unsafe class BTSystem : JobComponentSystem
 		public void Execute()
 		{
 			Debug.Log($"Update {Node.DataType} {UnsafeUtility.SizeOf(Node.DataType)} {Params.NodeData.Length / UnsafeUtility.SizeOf(Node.DataType)}");
+			Node.Update(Params.NodeData);
 		}
 
 		/*public void Execute(int index)
@@ -160,7 +191,7 @@ unsafe class BTSystem : JobComponentSystem
 			var tree = _trees[treeIdx];
 			_group.SetFilter(tree);
 
-			Debug.Log($"Tree {tree.Def.Nodes.Length}");
+			//Debug.Log($"Tree {tree.Def.Nodes.Length}");
 			for (int i=tree.Def.Nodes.Length-1; i>=0; --i)
 			{
 				/*inputDeps = new Job
@@ -184,20 +215,27 @@ public class TestDesign : MonoBehaviour
 
 	private void Start()
 	{
+		var N = 10000;
+
 		Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
 
 		var def = new TreeDef
 		{
-			Nodes = new[] {
+			Nodes = new INode[] {
 				new FooNode(),
+				new FooNode(),
+				new FooNode(),
+				new FooNode(),
+				new FooNode(),
+				new BarNode(),
 				/*new Node(typeof(float)),
 				new Node(typeof(Vector3Int)),*/
 			}
 		};
 
-		_runtime = TreeRuntime.Create(def);
+		_runtime = TreeRuntime.Create(def, N);
 		var man = World.Active.GetOrCreateManager<EntityManager>();
-		for (int i=0; i<10000; ++i)
+		for (int i=0; i<N; ++i)
 		{
 			var e = man.CreateEntity();
 			man.AddSharedComponentData(e, _runtime);
