@@ -25,14 +25,14 @@ interface INode
 	Type DataType { get; }
 }
 
-class Node : INode
+/*class Node : INode
 {
 	public Type DataType { get; private set; }
 	public Node(Type dataType)
 	{
 		DataType = dataType;
 	}
-}
+}*/
 
 class TNode<T> : INode
 	where T : struct
@@ -62,13 +62,15 @@ struct TreeRuntime : ISharedComponentData, IDisposable
 	[ReadOnly] public TreeDef Def;
 	NativeArray<byte> Data;
 	NativeArray<int> NodeDataOffset;
+	int Capacity;
 	//NativeArray<NativeArray<byte>> Data;
 
-	public static TreeRuntime Create(TreeDef tree, int capacity = 0xFFFFFF)
+	public static TreeRuntime Create(TreeDef tree, int capacity = 10000)
 	{
 		var rt = new TreeRuntime
 		{
 			Def = tree,
+			Capacity = capacity,
 		};
 		rt.Data = new NativeArray<byte>(tree.Nodes.Sum(n => UnsafeUtility.SizeOf(n.DataType)) * capacity, Allocator.Persistent);
 		rt.NodeDataOffset = new NativeArray<int>(tree.Nodes.Length, Allocator.Persistent);
@@ -89,12 +91,17 @@ struct TreeRuntime : ISharedComponentData, IDisposable
 		return rt;
 	}
 
-	public NativeArray<T> GetNodeDataArray<T>(int i)
+	public NativeSlice<byte> GetData(int nodeIndex)
+	{
+		return Data.Slice(NodeDataOffset[nodeIndex], UnsafeUtility.SizeOf(Def.Nodes[nodeIndex].DataType) * Capacity);
+	}
+
+	/*public NativeArray<T> GetNodeDataArray<T>(int i)
 		where T : struct
 	{
 		return default(NativeArray<T>);
 		//NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray()
-	}
+	}*/
 
 	public void Dispose()
 	{
@@ -105,24 +112,31 @@ struct TreeRuntime : ISharedComponentData, IDisposable
 
 unsafe class BTSystem : JobComponentSystem
 {
-	struct Job : IJob, IJobParallelFor
+	struct Job : IJob//, IJobParallelFor
 	{
-		[ReadOnly] public readonly INode Node;
+		public struct ExecutionParams
+		{
+			public NativeSlice<byte> NodeData;
+		}
 
-		public Job(INode node)
+		[ReadOnly] public readonly INode Node;
+		[ReadOnly] public readonly ExecutionParams Params;
+
+		public Job(INode node, ExecutionParams execParams)
 		{
 			Node = node;
+			Params = execParams;
 		}
 
 		public void Execute()
 		{
-			Debug.Log($"Update {Node.DataType}");
+			Debug.Log($"Update {Node.DataType} {UnsafeUtility.SizeOf(Node.DataType)} {Params.NodeData.Length / UnsafeUtility.SizeOf(Node.DataType)}");
 		}
 
-		public void Execute(int index)
+		/*public void Execute(int index)
 		{
 		
-		}
+		}*/
 	}
 
 	private ComponentGroup _group;
@@ -153,7 +167,10 @@ unsafe class BTSystem : JobComponentSystem
 				{
 					Node = tree.Def.Nodes[i],
 				}.Schedule(inputDeps);*/
-				inputDeps = new Job(tree.Def.Nodes[i]).Schedule(inputDeps);
+				inputDeps = new Job(tree.Def.Nodes[i], new Job.ExecutionParams
+				{
+					NodeData = tree.GetData(i),
+				}).Schedule(inputDeps);
 			}
 		}
 
