@@ -8,33 +8,12 @@ using Unity.Jobs;
 using Unity.Collections.LowLevel.Unsafe;
 using System.Linq;
 
-/*interface ITreeNode
-{
-	Type DataType { get; }
-}
-
-class TreeNode<T>
-	: ITreeNode
-	where T : struct
-{
-	public Type DataType => typeof(T);
-}*/
-
 unsafe interface INode
 {
 	Type DataType { get; }
 
 	void Update(NativeSlice<byte> data);
 }
-
-/*class Node : INode
-{
-	public Type DataType { get; private set; }
-	public Node(Type dataType)
-	{
-		DataType = dataType;
-	}
-}*/
 
 abstract class TNode<T> : INode
 	where T : struct
@@ -43,9 +22,6 @@ abstract class TNode<T> : INode
 
 	public unsafe void Update(NativeSlice<byte> data)
 	{
-		//var sl = NativeSliceUnsafeUtility.ConvertExistingDataToNativeSlice<T>(data.GetUnsafePtr(), UnsafeUtility.SizeOf<T>(), 1);
-		//var arr = NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<T>(data.GetUnsafePtr(), data.Length / UnsafeUtility.SizeOf<T>(), Allocator.Invalid);
-		//NativeArrayUnsafeUtility.SetAtomicSafetyHandle(ref arr, NativeArrayUnsafeUtility.GetAtomicSafetyHandle<byte>(data.));
 		var arr = data.SliceConvert<T>();
 		for (int i=0; i<arr.Length; ++i)
 		{
@@ -63,7 +39,6 @@ class FooNode : TNode<Vector3Int>
 	public override void Update(ref Vector3Int value)
 	{
 		++value.x;
-		//Debug.Log($"FooNode::Update {value}");
 	}
 }
 
@@ -93,8 +68,7 @@ struct TreeRuntime : ISharedComponentData, IDisposable
 	NativeArray<byte> Data;
 	NativeArray<int> NodeDataOffset;
 	int Capacity;
-	//NativeArray<NativeArray<byte>> Data;
-
+	
 	public static TreeRuntime Create(TreeDef tree, int capacity = 10)
 	{
 		var rt = new TreeRuntime
@@ -111,13 +85,6 @@ struct TreeRuntime : ISharedComponentData, IDisposable
 			off += UnsafeUtility.SizeOf(tree.Nodes[i].DataType) * capacity;
 		}
 
-		/*rt.Data = new NativeArray<NativeArray<byte>>(tree.NodeTypes.Length, Allocator.Persistent);
-		for (int i=0; i<tree.NodeTypes.Length; ++i)
-		{
-			rt.Data[i] = new NativeArray<byte>(
-				UnsafeUtility.SizeOf(tree.NodeTypes[i]) * capacity, 
-				Allocator.Persistent);
-		}*/
 		return rt;
 	}
 
@@ -125,13 +92,6 @@ struct TreeRuntime : ISharedComponentData, IDisposable
 	{
 		return Data.Slice(NodeDataOffset[nodeIndex], UnsafeUtility.SizeOf(Def.Nodes[nodeIndex].DataType) * Capacity);
 	}
-
-	/*public NativeArray<T> GetNodeDataArray<T>(int i)
-		where T : struct
-	{
-		return default(NativeArray<T>);
-		//NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray()
-	}*/
 
 	public void Dispose()
 	{
@@ -191,13 +151,8 @@ unsafe class BTSystem : JobComponentSystem
 			var tree = _trees[treeIdx];
 			_group.SetFilter(tree);
 
-			//Debug.Log($"Tree {tree.Def.Nodes.Length}");
 			for (int i=tree.Def.Nodes.Length-1; i>=0; --i)
 			{
-				/*inputDeps = new Job
-				{
-					Node = tree.Def.Nodes[i],
-				}.Schedule(inputDeps);*/
 				inputDeps = new Job(tree.Def.Nodes[i], new Job.ExecutionParams
 				{
 					NodeData = tree.GetData(i),
@@ -221,15 +176,14 @@ public class TestDesign : MonoBehaviour
 
 		var def = new TreeDef
 		{
-			Nodes = new INode[] {
+			Nodes = new INode[] 
+			{
 				new FooNode(),
 				new FooNode(),
 				new FooNode(),
 				new FooNode(),
 				new FooNode(),
 				new BarNode(),
-				/*new Node(typeof(float)),
-				new Node(typeof(Vector3Int)),*/
 			}
 		};
 
