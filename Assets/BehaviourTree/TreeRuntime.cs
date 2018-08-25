@@ -25,8 +25,8 @@ namespace Sharvey.ECS.BehaviourTree
 		[ReadOnly] public TreeDef Def;
 		NativeArray<int> NodeDataOffset;
 		// data and state should be in sync: index of an entity in the data has to be the same in the state array
-		NativeArray<byte> Data;
-		NativeArray<NodeState> State;
+		NativeArray<byte> NodeData;
+		public NativeArray<NodeState> StateData;
 		private int Capacity;
 		private GCHandle _allocHandle;
 
@@ -37,8 +37,8 @@ namespace Sharvey.ECS.BehaviourTree
 				Def = tree,
 				Capacity = capacity,
 			};
-			rt.Data = new NativeArray<byte>(tree.Nodes.Sum(n => UnsafeUtility.SizeOf(n.DataType)) * capacity, Allocator.Persistent, NativeArrayOptions.ClearMemory);
-			rt.State = new NativeArray<NodeState>(tree.Nodes.Length * capacity, Allocator.Persistent, NativeArrayOptions.ClearMemory);
+			rt.NodeData = new NativeArray<byte>(tree.Nodes.Sum(n => UnsafeUtility.SizeOf(n.DataType)) * capacity, Allocator.Persistent, NativeArrayOptions.ClearMemory);
+			rt.StateData = new NativeArray<NodeState>(tree.Nodes.Length * capacity, Allocator.Persistent, NativeArrayOptions.ClearMemory);
 			rt.NodeDataOffset = new NativeArray<int>(tree.Nodes.Length, Allocator.Persistent);
 			rt._allocHandle = GCHandle.Alloc(new AllocState());
 			int off = 0;
@@ -53,7 +53,7 @@ namespace Sharvey.ECS.BehaviourTree
 
 		public NativeSlice<byte> GetData(int nodeIndex)
 		{
-			return Data.Slice(NodeDataOffset[nodeIndex], UnsafeUtility.SizeOf(Def.Nodes[nodeIndex].DataType) * Capacity);
+			return NodeData.Slice(NodeDataOffset[nodeIndex], UnsafeUtility.SizeOf(Def.Nodes[nodeIndex].DataType) * Capacity);
 		}
 
 		public TreeRuntimeComponentData Register(EntityManager manager, Entity e)
@@ -70,14 +70,14 @@ namespace Sharvey.ECS.BehaviourTree
 
 		private void Activate(TreeRuntimeComponentData e)
 		{
-			State[e.Index] = NodeState.Activating;
+			StateData[e.Index * Def.Nodes.Length] = NodeState.Activating;
 		}
 
 		public void Dispose()
 		{
-			Data.Dispose();
+			NodeData.Dispose();
 			NodeDataOffset.Dispose();
-			State.Dispose();
+			StateData.Dispose();
 			_allocHandle.Free();
 		}
 	}

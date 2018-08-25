@@ -6,17 +6,20 @@ using UnityEngine;
 
 class FooNode : TNode<Vector3Int>
 {
-	public override void Update(NodeStateHandle state, ref Vector3Int value)
+	public override NodeState Update(NodeStateHandle state, ref Vector3Int value)
 	{
+		Debug.Log("Update foo");
 		++value.x;
+		return NodeState.Complete;
 	}
 }
 
 class BarNode : TNode<int>
 {
-	public override void Update(NodeStateHandle state, ref int value)
+	public override NodeState Update(NodeStateHandle state, ref int value)
 	{
 		++value;
+		return NodeState.Complete;
 	}
 }
 

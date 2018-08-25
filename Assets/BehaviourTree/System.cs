@@ -18,13 +18,16 @@ namespace Sharvey.ECS.BehaviourTree
 			{
 				public NativeSlice<NodeState> State;
 				public NativeSlice<byte> NodeData;
+				public int NodeIndex;
 			}
 
 			[ReadOnly] public readonly INode Node;
 			[ReadOnly] public readonly ExecutionParams Params;
+			[ReadOnly] public readonly TreeDef Def;
 
-			public Job(INode node, ExecutionParams execParams)
+			public Job(TreeDef def, INode node, ExecutionParams execParams)
 			{
+				Def = def;
 				Node = node;
 				Params = execParams;
 			}
@@ -32,7 +35,7 @@ namespace Sharvey.ECS.BehaviourTree
 			public void Execute()
 			{
 				//Debug.Log($"Update {Node.DataType} {UnsafeUtility.SizeOf(Node.DataType)} {Params.NodeData.Length / UnsafeUtility.SizeOf(Node.DataType)}");
-				Node.Update(Params.State, Params.NodeData);
+				Node.Update(Params.NodeIndex, Def, Params.State, Params.NodeData);
 			}
 		}
 
@@ -60,9 +63,11 @@ namespace Sharvey.ECS.BehaviourTree
 
 				for (int i = tree.Def.Nodes.Length - 1; i >= 0; --i)
 				{
-					inputDeps = new Job(tree.Def.Nodes[i], new Job.ExecutionParams
+					inputDeps = new Job(tree.Def, tree.Def.Nodes[i], new Job.ExecutionParams
 					{
+						State = tree.StateData,
 						NodeData = tree.GetData(i),
+						NodeIndex = i,
 					}).Schedule(inputDeps);
 				}
 			}

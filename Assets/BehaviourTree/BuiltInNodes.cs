@@ -8,9 +8,9 @@ namespace Sharvey.ECS.BehaviourTree
 {
 	public class Sequence : TNode<int>
 	{
-		public override void Update(NodeStateHandle state, ref int value)
+		public override NodeState Update(NodeStateHandle state, ref int value)
 		{
-			
+			return NodeState.Active;
 		}
 	}
 }
