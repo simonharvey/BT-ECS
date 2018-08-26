@@ -10,7 +10,12 @@ namespace Sharvey.ECS.BehaviourTree
 	{
 		public class Span
 		{
-			public int First, Count;
+			public readonly int First, Count;
+			public Span(int first, int count)
+			{
+				First = first;
+				Count = count;
+			}
 		}
 
 		public INode[] Nodes;

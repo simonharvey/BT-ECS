@@ -37,7 +37,7 @@ namespace Sharvey.ECS.BehaviourTree
 				Def = tree,
 				Capacity = capacity,
 			};
-			rt.NodeData = new NativeArray<byte>(tree.Nodes.Sum(n => UnsafeUtility.SizeOf(n.DataType)) * capacity, Allocator.Persistent, NativeArrayOptions.ClearMemory);
+			rt.NodeData = new NativeArray<byte>(tree.Nodes.Sum(n => n.DataSize) * capacity, Allocator.Persistent, NativeArrayOptions.ClearMemory);
 			rt.StateData = new NativeArray<NodeState>(tree.Nodes.Length * capacity, Allocator.Persistent, NativeArrayOptions.ClearMemory);
 			rt.NodeDataOffset = new NativeArray<int>(tree.Nodes.Length, Allocator.Persistent);
 			rt._allocHandle = GCHandle.Alloc(new AllocState());
@@ -45,7 +45,7 @@ namespace Sharvey.ECS.BehaviourTree
 			for (int i = 0; i < tree.Nodes.Length; ++i)
 			{
 				rt.NodeDataOffset[i] = off;
-				off += UnsafeUtility.SizeOf(tree.Nodes[i].DataType) * capacity;
+				off += tree.Nodes[i].DataSize * capacity;
 			}
 
 			return rt;
@@ -53,7 +53,7 @@ namespace Sharvey.ECS.BehaviourTree
 
 		public NativeSlice<byte> GetData(int nodeIndex)
 		{
-			return NodeData.Slice(NodeDataOffset[nodeIndex], UnsafeUtility.SizeOf(Def.Nodes[nodeIndex].DataType) * Capacity);
+			return NodeData.Slice(NodeDataOffset[nodeIndex], Def.Nodes[nodeIndex].DataSize * Capacity);
 		}
 
 		public TreeRuntimeComponentData Register(EntityManager manager, Entity e)

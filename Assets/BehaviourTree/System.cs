@@ -54,7 +54,7 @@ namespace Sharvey.ECS.BehaviourTree
 		{
 			_trees.Clear();
 			EntityManager.GetAllUniqueSharedComponentDatas<TreeRuntime>(_trees);
-			Debug.Log($"Num trees {_trees.Count - 1}");
+			//Debug.Log($"Num trees {_trees.Count - 1}");
 			
 			for (int treeIdx = 1; treeIdx < _trees.Count; ++treeIdx)
 			{

@@ -4,7 +4,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
+using UnityEngine.Profiling;
 
 namespace Sharvey.ECS.BehaviourTree
 {
@@ -27,18 +29,51 @@ namespace Sharvey.ECS.BehaviourTree
 
 	public unsafe interface INode
 	{
-		Type DataType { get; }
+		int DataSize { get; }
 
 		void Update(int nodeIndex, TreeDef treeDef, NativeSlice<NodeState> state, NativeSlice<byte> data);
+	}
+
+	public abstract class Node : INode
+	{
+		public int DataSize => 0;
+
+		public void Update(int nodeIndex, TreeDef treeDef, NativeSlice<NodeState> state, NativeSlice<byte> data)
+		{
+			int nStates = state.Length / treeDef.Nodes.Length;
+
+			for (int i = 0; i < nStates; ++i)
+			{
+				var h = new NodeStateHandle(nodeIndex, state.Slice(i * treeDef.Nodes.Length, treeDef.Nodes.Length), treeDef);
+
+				if (!h.State.Running())
+					continue;
+
+				if (h.State == NodeState.Activating)
+				{
+					//Debug.Log("AAAA");
+					h.State = NodeState.Active;
+				}
+
+				if (h.State == NodeState.Active)
+				{
+					//Debug.Log("BBBB");
+					h.State = Update(h);
+				}
+			}
+		}
+
+		public abstract NodeState Update(NodeStateHandle h);
 	}
 
 	public abstract class TNode<T> : INode
 		where T : struct
 	{
-		public Type DataType => typeof(T);
+		public int DataSize => UnsafeUtility.SizeOf<T>();
 
 		public unsafe void Update(int nodeIndex, TreeDef treeDef, NativeSlice<NodeState> state, NativeSlice<byte> data)
 		{
+			Profiler.BeginSample("TNode::Update");
 			var arr = data.SliceConvert<T>();
 			for (int i = 0; i < arr.Length; ++i)
 			{
@@ -56,15 +91,18 @@ namespace Sharvey.ECS.BehaviourTree
 					arr[i] = v;
 				}
 			}
+			Profiler.EndSample();
 		}
 
-		public virtual NodeState Activate(NodeStateHandle state, ref T value)
-		{
-			//Debug.Log($"Activate {this}");
-			return NodeState.Active;
-		}
-
+		public abstract NodeState Activate(NodeStateHandle state, ref T value);
 		public abstract NodeState Update(NodeStateHandle state, ref T value);
+
+		/*public virtual NodeState Activate(NodeStateHandle state, ref T value)
+		{
+			Debug.Log($"Activate {this}");
+			return NodeState.Active;
+		}*/
+
 	}
 
 	public struct NodeStateHandle

@@ -6,6 +6,11 @@ using UnityEngine;
 
 class FooNode : TNode<Vector3Int>
 {
+	public override NodeState Activate(NodeStateHandle state, ref Vector3Int value)
+	{
+		return NodeState.Active;
+	}
+
 	public override NodeState Update(NodeStateHandle state, ref Vector3Int value)
 	{
 		Debug.Log("Update foo");
@@ -16,6 +21,12 @@ class FooNode : TNode<Vector3Int>
 
 class BarNode : TNode<int>
 {
+	public override NodeState Activate(NodeStateHandle state, ref int value)
+	{
+		value = 0;
+		return NodeState.Active;
+	}
+
 	public override NodeState Update(NodeStateHandle state, ref int value)
 	{
 		++value;
@@ -31,11 +42,14 @@ public class TestBT : MonoBehaviour
 	{
 		Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
 
-		var N = 10000;
+		var N = 10;
 
-		var def = Builder.Compile(new NodeBuilder(new FooNode())
-			.CreateChild(new BarNode()).End()
-			.CreateChild(new BarNode()).End()
+		var def = Builder.Compile(new NodeBuilder(new Sequence())
+			.CreateChild(new PrintNode("A")).End()
+			.CreateChild(new PrintNode("B")).End()
+			.CreateChild(new PrintNode("C")).End()
+			//.CreateChild(new BarNode()).End()
+			//.CreateChild(new BarNode()).End()
 		.End());
 		_runtime = TreeRuntime.Create(def, N);
 
