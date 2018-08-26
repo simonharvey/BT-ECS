@@ -2,28 +2,44 @@
 
 namespace Sharvey.ECS.BehaviourTree
 {
+	public class LoopForever : Node
+	{
+		public override NodeState Update(float dt, NodeStateHandle h)
+		{
+			for (int i=0; i<h.ChildCount; ++i)
+			{
+				if (!h.ChildState(i).Active())
+				{
+					h.ActivateChild(i);
+				}
+			}
+
+			return NodeState.Running;
+		}
+	}
+
 	public class Sequence : TNode<int>
 	{
 		public override NodeState Activate(NodeStateHandle state, ref int value)
 		{
 			value = 0;
 			state.ActivateChild(0);
-			return NodeState.Active;
+			return NodeState.Running;
 		}
 
-		public override NodeState Update(NodeStateHandle state, ref int value)
+		public override NodeState Update(float dt, NodeStateHandle state, ref int value)
 		{
 			var curChildState = state.ChildState(value);
 
-			if (curChildState.Running())
+			if (curChildState.Active())
 			{
-				return NodeState.Active;
+				return NodeState.Running;
 			}
 			++value;
 			if (value < state.ChildCount)
 			{
 				state.ActivateChild(value);
-				return NodeState.Active;
+				return NodeState.Running;
 			}
 			else
 			{
@@ -44,15 +60,15 @@ namespace Sharvey.ECS.BehaviourTree
 		public override NodeState Activate(NodeStateHandle state, ref float value)
 		{
 			value = Duration;
-			return NodeState.Active;
+			return NodeState.Running;
 		}
 
-		public override NodeState Update(NodeStateHandle state, ref float value)
+		public override NodeState Update(float dt, NodeStateHandle state, ref float value)
 		{
-			value -= 0.1f;
+			value -= dt;
 			if (value <= 0.0f)
 				return NodeState.Complete;
-			return NodeState.Active;
+			return NodeState.Running;
 		}
 	}
 
@@ -65,9 +81,9 @@ namespace Sharvey.ECS.BehaviourTree
 			Value = value;
 		}
 
-		public override NodeState Update(NodeStateHandle h)
+		public override NodeState Update(float dt, NodeStateHandle h)
 		{
-			Debug.Log(Value);
+			//Debug.Log(Value);
 			return NodeState.Complete;
 		}
 	}

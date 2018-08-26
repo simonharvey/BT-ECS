@@ -8,10 +8,10 @@ class FooNode : TNode<Vector3Int>
 {
 	public override NodeState Activate(NodeStateHandle state, ref Vector3Int value)
 	{
-		return NodeState.Active;
+		return NodeState.Running;
 	}
 
-	public override NodeState Update(NodeStateHandle state, ref Vector3Int value)
+	public override NodeState Update(float dt, NodeStateHandle state, ref Vector3Int value)
 	{
 		Debug.Log("Update foo");
 		++value.x;
@@ -24,10 +24,10 @@ class BarNode : TNode<int>
 	public override NodeState Activate(NodeStateHandle state, ref int value)
 	{
 		value = 0;
-		return NodeState.Active;
+		return NodeState.Running;
 	}
 
-	public override NodeState Update(NodeStateHandle state, ref int value)
+	public override NodeState Update(float dt, NodeStateHandle state, ref int value)
 	{
 		++value;
 		return NodeState.Complete;
@@ -42,12 +42,15 @@ public class TestBT : MonoBehaviour
 	{
 		Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
 
-		var N = 10;
+		var N = 10000;
 
-		var def = Builder.Compile(new NodeBuilder(new Sequence())
-			.CreateChild(new PrintNode("A")).End()
-			.CreateChild(new PrintNode("B")).End()
-			.CreateChild(new PrintNode("C")).End()
+		var def = Builder.Compile(new NodeBuilder(new LoopForever())
+			.CreateChild(new Sequence())
+				.CreateChild(new PrintNode("A")).End()
+				.CreateChild(new PrintNode("B")).End()
+				.CreateChild(new PrintNode("C")).End()
+				.CreateChild(new Delay(2.0f)).End()
+			.End()
 			//.CreateChild(new BarNode()).End()
 			//.CreateChild(new BarNode()).End()
 		.End());

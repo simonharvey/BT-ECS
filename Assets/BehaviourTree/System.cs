@@ -19,6 +19,7 @@ namespace Sharvey.ECS.BehaviourTree
 				public NativeSlice<NodeState> State;
 				public NativeSlice<byte> NodeData;
 				public int NodeIndex;
+				public float Dt;
 			}
 
 			[ReadOnly] public readonly INode Node;
@@ -35,7 +36,7 @@ namespace Sharvey.ECS.BehaviourTree
 			public void Execute()
 			{
 				//Debug.Log($"Update {Node.DataType} {UnsafeUtility.SizeOf(Node.DataType)} {Params.NodeData.Length / UnsafeUtility.SizeOf(Node.DataType)}");
-				Node.Update(Params.NodeIndex, Def, Params.State, Params.NodeData);
+				Node.Update(Params.Dt, Params.NodeIndex, Def, Params.State, Params.NodeData);
 			}
 		}
 
@@ -68,6 +69,7 @@ namespace Sharvey.ECS.BehaviourTree
 						State = tree.StateData,
 						NodeData = tree.GetData(i),
 						NodeIndex = i,
+						Dt = Time.deltaTime,
 					}).Schedule(inputDeps);
 				}
 			}

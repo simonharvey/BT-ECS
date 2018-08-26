@@ -14,16 +14,16 @@ namespace Sharvey.ECS.BehaviourTree
 	{
 		Inactive,
 		Activating,
-		Active,
+		Running,
 		Complete,
 		Failed
 	}
 
 	static class NodeStateExt
 	{
-		public static bool Running(this NodeState state)
+		public static bool Active(this NodeState state)
 		{
-			return state == NodeState.Activating || state == NodeState.Active;
+			return state == NodeState.Activating || state == NodeState.Running;
 		}
 	}
 
@@ -31,14 +31,14 @@ namespace Sharvey.ECS.BehaviourTree
 	{
 		int DataSize { get; }
 
-		void Update(int nodeIndex, TreeDef treeDef, NativeSlice<NodeState> state, NativeSlice<byte> data);
+		void Update(float dt, int nodeIndex, TreeDef treeDef, NativeSlice<NodeState> state, NativeSlice<byte> data);
 	}
 
 	public abstract class Node : INode
 	{
 		public int DataSize => 0;
 
-		public void Update(int nodeIndex, TreeDef treeDef, NativeSlice<NodeState> state, NativeSlice<byte> data)
+		public void Update(float dt, int nodeIndex, TreeDef treeDef, NativeSlice<NodeState> state, NativeSlice<byte> data)
 		{
 			int nStates = state.Length / treeDef.Nodes.Length;
 
@@ -46,24 +46,24 @@ namespace Sharvey.ECS.BehaviourTree
 			{
 				var h = new NodeStateHandle(nodeIndex, state.Slice(i * treeDef.Nodes.Length, treeDef.Nodes.Length), treeDef);
 
-				if (!h.State.Running())
+				if (!h.State.Active())
 					continue;
 
 				if (h.State == NodeState.Activating)
 				{
 					//Debug.Log("AAAA");
-					h.State = NodeState.Active;
+					h.State = NodeState.Running;
 				}
 
-				if (h.State == NodeState.Active)
+				if (h.State == NodeState.Running)
 				{
 					//Debug.Log("BBBB");
-					h.State = Update(h);
+					h.State = Update(dt, h);
 				}
 			}
 		}
 
-		public abstract NodeState Update(NodeStateHandle h);
+		public abstract NodeState Update(float dt, NodeStateHandle h);
 	}
 
 	public abstract class TNode<T> : INode
@@ -71,7 +71,7 @@ namespace Sharvey.ECS.BehaviourTree
 	{
 		public int DataSize => UnsafeUtility.SizeOf<T>();
 
-		public unsafe void Update(int nodeIndex, TreeDef treeDef, NativeSlice<NodeState> state, NativeSlice<byte> data)
+		public unsafe void Update(float dt, int nodeIndex, TreeDef treeDef, NativeSlice<NodeState> state, NativeSlice<byte> data)
 		{
 			Profiler.BeginSample("TNode::Update");
 			var arr = data.SliceConvert<T>();
@@ -85,9 +85,9 @@ namespace Sharvey.ECS.BehaviourTree
 					h.State = Activate(h, ref v);
 				}
 
-				if (h.State == NodeState.Active)
+				if (h.State == NodeState.Running)
 				{
-					h.State = Update(h, ref v);
+					h.State = Update(dt, h, ref v);
 					arr[i] = v;
 				}
 			}
@@ -95,7 +95,7 @@ namespace Sharvey.ECS.BehaviourTree
 		}
 
 		public abstract NodeState Activate(NodeStateHandle state, ref T value);
-		public abstract NodeState Update(NodeStateHandle state, ref T value);
+		public abstract NodeState Update(float dt, NodeStateHandle state, ref T value);
 
 		/*public virtual NodeState Activate(NodeStateHandle state, ref T value)
 		{
