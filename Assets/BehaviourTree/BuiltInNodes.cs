@@ -50,16 +50,21 @@ namespace Sharvey.ECS.BehaviourTree
 
 	public class Delay : TNode<float>
 	{
-		public readonly float Duration;
+		public readonly float MinDuration;
+		public readonly float? MaxDuration;
 
-		public Delay(float duration)
+		public Delay(float minDuration, float? maxDuration = null)
 		{
-			Duration = duration;
+			MinDuration = minDuration;
+			MaxDuration = maxDuration;
 		}
 
 		public override NodeState Activate(NodeStateHandle state, ref float value)
 		{
-			value = Duration;
+			if (MaxDuration.HasValue)
+				value = (float)(new System.Random().NextDouble() * (MaxDuration.Value - MinDuration)) + MinDuration;
+			else
+				value = MinDuration;
 			return NodeState.Running;
 		}
 
@@ -83,7 +88,7 @@ namespace Sharvey.ECS.BehaviourTree
 
 		public override NodeState Update(float dt, NodeStateHandle h)
 		{
-			//Debug.Log(Value);
+			Debug.Log(Value);
 			return NodeState.Complete;
 		}
 	}

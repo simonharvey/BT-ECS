@@ -202,3 +202,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1bf3fad465e45d54eb09659ca84a8d1a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _enemyPrefab: {fileID: 1585069284794396, guid: 4336b04843e61d64dbe8be0c0573bf8c,
+    type: 2}

@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using Unity.Entities;
+using Unity.Transforms;
 using UnityEngine;
 
 class FooNode : TNode<Vector3Int>
@@ -37,6 +38,7 @@ class BarNode : TNode<int>
 public class TestBT : MonoBehaviour
 {
 	TreeRuntime _runtime;
+	[SerializeField] private GameObject _enemyPrefab;
 
 	private void Start()
 	{
@@ -49,7 +51,7 @@ public class TestBT : MonoBehaviour
 				.CreateChild(new PrintNode("A")).End()
 				.CreateChild(new PrintNode("B")).End()
 				.CreateChild(new PrintNode("C")).End()
-				.CreateChild(new Delay(2.0f)).End()
+				.CreateChild(new Delay(2.0f, 5.0f)).End()
 			.End()
 			//.CreateChild(new BarNode()).End()
 			//.CreateChild(new BarNode()).End()
@@ -59,7 +61,10 @@ public class TestBT : MonoBehaviour
 		var man = World.Active.GetOrCreateManager<EntityManager>();
 		for (int i = 0; i < N; ++i)
 		{
-			var e = man.CreateEntity();
+			var e = man.Instantiate(_enemyPrefab);
+			man.SetComponentData(e, new Position { Value = Random.insideUnitSphere * 50.0f });
+			//man.AddComponentData(e, new Blackboard { Map = new Unity.Collections.NativeHashMap<uint, uint>() });
+			//var e = man.CreateEntity();
 			_runtime.Register(man, e);
 		}
 	}
