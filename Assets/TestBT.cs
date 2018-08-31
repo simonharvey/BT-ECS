@@ -44,7 +44,7 @@ public class TestBT : MonoBehaviour
 	{
 		Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
 
-		var N = 10000;
+		var N = 1000;
 
 		var def = Builder.Compile(new NodeBuilder(new LoopForever())
 			.CreateChild(new Sequence())
@@ -53,8 +53,6 @@ public class TestBT : MonoBehaviour
 				.CreateChild(new PrintNode("C")).End()
 				.CreateChild(new Delay(2.0f, 5.0f)).End()
 			.End()
-			//.CreateChild(new BarNode()).End()
-			//.CreateChild(new BarNode()).End()
 		.End());
 		_runtime = TreeRuntime.Create(def, N);
 

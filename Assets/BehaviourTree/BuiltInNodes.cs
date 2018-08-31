@@ -4,6 +4,11 @@ namespace Sharvey.ECS.BehaviourTree
 {
 	public class LoopForever : Node
 	{
+		public override NodeState Activate(NodeStateHandle state)
+		{
+			return NodeState.Running;
+		}
+
 		public override NodeState Update(float dt, NodeStateHandle h)
 		{
 			for (int i=0; i<h.ChildCount; ++i)
@@ -48,6 +53,32 @@ namespace Sharvey.ECS.BehaviourTree
 		}
 	}
 
+	public class Parallel : Node
+	{
+		public override NodeState Activate(NodeStateHandle state)
+		{
+			for (int i=0; i<state.ChildCount; ++i)
+			{
+				state.ActivateChild(i);
+			}
+
+			return NodeState.Running;
+		}
+
+		public override NodeState Update(float dt, NodeStateHandle h)
+		{
+			for (int i=0; i<h.ChildCount; ++i)
+			{
+				if (h.ChildState(i) != NodeState.Running)
+				{
+					return h.ChildState(i);
+				}
+			}
+
+			return NodeState.Running;
+		}
+	}
+
 	public class Delay : TNode<float>
 	{
 		public readonly float MinDuration;
@@ -84,6 +115,11 @@ namespace Sharvey.ECS.BehaviourTree
 		public PrintNode(string value)
 		{
 			Value = value;
+		}
+
+		public override NodeState Activate(NodeStateHandle state)
+		{
+			return NodeState.Running;
 		}
 
 		public override NodeState Update(float dt, NodeStateHandle h)
