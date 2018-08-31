@@ -51,13 +51,11 @@ namespace Sharvey.ECS.BehaviourTree
 
 				if (h.State == NodeState.Activating)
 				{
-					//Debug.Log("AAAA");
 					h.State = Activate(h);
 				}
 
 				if (h.State == NodeState.Running)
 				{
-					//Debug.Log("BBBB");
 					h.State = Update(dt, h);
 				}
 			}
@@ -97,13 +95,6 @@ namespace Sharvey.ECS.BehaviourTree
 
 		public abstract NodeState Activate(NodeStateHandle state, ref T value);
 		public abstract NodeState Update(float dt, NodeStateHandle state, ref T value);
-
-		/*public virtual NodeState Activate(NodeStateHandle state, ref T value)
-		{
-			Debug.Log($"Activate {this}");
-			return NodeState.Active;
-		}*/
-
 	}
 
 	public struct NodeStateHandle
