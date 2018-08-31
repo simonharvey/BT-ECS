@@ -16,6 +16,7 @@ namespace Sharvey.ECS.BehaviourTree
 	}
 
 	struct TreeRuntime : ISharedComponentData, IDisposable
+		//where TBlackboard : struct, IComponentData
 	{
 		private class AllocState
 		{
@@ -29,8 +30,11 @@ namespace Sharvey.ECS.BehaviourTree
 		public NativeArray<NodeState> StateData;
 		private int Capacity;
 		private GCHandle _allocHandle;
+		private Type _blackboardType;
+		//private TBlackboard _defaultBlackboard;
 
-		public static TreeRuntime Create(TreeDef tree, int capacity = 10)
+		public static TreeRuntime Create<TBlackboard>(TreeDef tree, int capacity, TBlackboard defaultBlackboard)
+			where TBlackboard : struct, IComponentData
 		{
 			var rt = new TreeRuntime
 			{
@@ -41,6 +45,8 @@ namespace Sharvey.ECS.BehaviourTree
 			rt.StateData = new NativeArray<NodeState>(tree.Nodes.Length * capacity, Allocator.Persistent, NativeArrayOptions.ClearMemory);
 			rt.NodeDataOffset = new NativeArray<int>(tree.Nodes.Length, Allocator.Persistent);
 			rt._allocHandle = GCHandle.Alloc(new AllocState());
+			rt._blackboardType = typeof(TBlackboard);
+			//rt._defaultBlackboard = defaultBlackboard;
 			int off = 0;
 			for (int i = 0; i < tree.Nodes.Length; ++i)
 			{
@@ -64,6 +70,8 @@ namespace Sharvey.ECS.BehaviourTree
 			};
 			manager.AddSharedComponentData(e, this);
 			manager.AddComponentData(e, rt);
+			
+			//manager.AddComponentData(e, (IComponentData)Activator.CreateInstance(_blackboardType));
 			Activate(rt);
 			return rt;
 		}

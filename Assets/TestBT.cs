@@ -5,6 +5,11 @@ using Unity.Entities;
 using Unity.Transforms;
 using UnityEngine;
 
+public struct TestBlackboard : IComponentData
+{
+	public Entity CurrentTarget;
+}
+
 class FooNode : TNode<Vector3Int>
 {
 	public override NodeState Activate(NodeStateHandle state, ref Vector3Int value)
@@ -54,7 +59,7 @@ public class TestBT : MonoBehaviour
 				.CreateChild(new Delay(2.0f, 5.0f)).End()
 			.End()
 		.End());
-		_runtime = TreeRuntime.Create(def, N);
+		_runtime = TreeRuntime.Create(def, N, new TestBlackboard());
 
 		var man = World.Active.GetOrCreateManager<EntityManager>();
 		for (int i = 0; i < N; ++i)
